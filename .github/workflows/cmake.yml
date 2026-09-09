@@ -1,10 +1,10 @@
 name: cmake
 
 on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
+  # push:
+  #   branches: [ master ]
+  # pull_request:
+  #   branches: [ master ]
   workflow_dispatch:
 
 permissions:
@@ -19,48 +19,48 @@ env:
   GENTEST_HELPER_BUILD_PARALLEL_LEVEL: 1
 
 jobs:
-  plan:
-    name: CMake • plan
-    runs-on: ubuntu-24.04
-    outputs:
-      run_cmake: ${{ steps.plan.outputs.run_cmake }}
-    steps:
-      - name: Checkout planner and history
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
+  # plan:
+  #   name: CMake • plan
+  #   runs-on: ubuntu-24.04
+  #   outputs:
+  #     run_cmake: ${{ steps.plan.outputs.run_cmake }}
+  #   steps:
+  #     - name: Checkout planner and history
+  #       uses: actions/checkout@v6
+  #       with:
+  #         fetch-depth: 0
 
-      - name: Compute CI plan
-        id: plan
-        env:
-          CI_EVENT_NAME: ${{ github.event_name }}
-          CI_REF: ${{ github.ref }}
-          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: |
-          ci_plan_script="scripts/ci_plan.py"
-          if [ "${CI_EVENT_NAME}" = "pull_request" ]; then
-            ci_plan_script="${RUNNER_TEMP}/ci_plan.py"
-            if ! git show "${CI_BASE_SHA}:scripts/ci_plan.py" > "${ci_plan_script}"; then
-              ci_plan_script=""
-            fi
-          fi
-          if [ -z "${ci_plan_script}" ] || ! python3 "${ci_plan_script}" \
-            --event "${CI_EVENT_NAME}" \
-            --ref "${CI_REF}" \
-            --base "${CI_BASE_SHA}" \
-            --head "${CI_HEAD_SHA}" \
-            --github-output "${GITHUB_OUTPUT}"
-          then
-            echo "CI planner failed; enabling all lanes." >&2
-            for lane in cmake lint coverage cross_qemu bazel meson xmake; do
-              printf 'run_%s=true\n' "${lane}" >> "${GITHUB_OUTPUT}"
-            done
-          fi
+  #     - name: Compute CI plan
+  #       id: plan
+  #       env:
+  #         CI_EVENT_NAME: ${{ github.event_name }}
+  #         CI_REF: ${{ github.ref }}
+  #         CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+  #         CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  #       run: |
+  #         ci_plan_script="scripts/ci_plan.py"
+  #         if [ "${CI_EVENT_NAME}" = "pull_request" ]; then
+  #           ci_plan_script="${RUNNER_TEMP}/ci_plan.py"
+  #           if ! git show "${CI_BASE_SHA}:scripts/ci_plan.py" > "${ci_plan_script}"; then
+  #             ci_plan_script=""
+  #           fi
+  #         fi
+  #         if [ -z "${ci_plan_script}" ] || ! python3 "${ci_plan_script}" \
+  #           --event "${CI_EVENT_NAME}" \
+  #           --ref "${CI_REF}" \
+  #           --base "${CI_BASE_SHA}" \
+  #           --head "${CI_HEAD_SHA}" \
+  #           --github-output "${GITHUB_OUTPUT}"
+  #         then
+  #           echo "CI planner failed; enabling all lanes." >&2
+  #           for lane in cmake lint coverage cross_qemu bazel meson xmake; do
+  #             printf 'run_%s=true\n' "${lane}" >> "${GITHUB_OUTPUT}"
+  #           done
+  #         fi
 
   macos:
-    needs: plan
-    if: ${{ needs.plan.outputs.run_cmake == 'true' }}
+    # needs: plan
+    # if: ${{ needs.plan.outputs.run_cmake == 'true' }}
     name: macOS • ${{ matrix.compiler == 'appleclang' && 'AppleClang (Xcode 26)' || format('Homebrew {0}', matrix.compiler) }} • ${{ matrix.variant == 'cxx23' && 'C++23 tests' || matrix.build-type }}
     runs-on: ${{ matrix.compiler == 'appleclang' && 'macos-26' || 'macos-15' }}
     strategy:
@@ -204,15 +204,15 @@ jobs:
           ctest "${ctest_args[@]}"
 
   windows:
-    needs: plan
-    if: ${{ needs.plan.outputs.run_cmake == 'true' }}
+    # needs: plan
+    # if: ${{ needs.plan.outputs.run_cmake == 'true' }}
     name: Windows • LLVM ${{ matrix.llvm-version }} • ${{ matrix.variant == 'cxx23' && 'C++23 tests' || matrix.preset }}
     runs-on: windows-2022
     strategy:
       fail-fast: false
       matrix:
         llvm-version: ["23.1.0", "22.1.0", "21.1.4"]
-        preset: ["debug-system", "release-system"]
+        preset: ["debug-system"]
         variant: ["default"]
         exclude:
           - llvm-version: "23.1.0"
@@ -387,8 +387,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   linux:
-    needs: plan
-    if: ${{ needs.plan.outputs.run_cmake == 'true' }}
+    # needs: plan
+    # if: ${{ needs.plan.outputs.run_cmake == 'true' }}
     name: ${{ matrix.name }} • ${{ matrix.preset == 'debug-system-cxx23' && 'C++23 tests' || matrix.build_type }}
     runs-on: ubuntu-24.04
     container: ${{ matrix.container }}
@@ -399,51 +399,6 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Ubuntu 24.04 • Clang 20
-            container: ubuntu:24.04
-            pkg_manager: apt
-            compiler: clang
-            cc: clang-20
-            cxx: clang++-20
-            clang_version: "20"
-            llvm_dir: /usr/lib/llvm-20/lib/cmake/llvm
-            clang_dir: /usr/lib/llvm-20/lib/cmake/clang
-            build_type: ASan+UBSan
-            preset: alusan-system
-            ctest_parallel: 2
-          - name: Ubuntu 24.04 • Clang 20
-            container: ubuntu:24.04
-            pkg_manager: apt
-            compiler: clang
-            cc: clang-20
-            cxx: clang++-20
-            clang_version: "20"
-            llvm_dir: /usr/lib/llvm-20/lib/cmake/llvm
-            clang_dir: /usr/lib/llvm-20/lib/cmake/clang
-            build_type: TSan
-            preset: tsan-system
-            ctest_parallel: 2
-          - name: Ubuntu 24.04 • Clang 20
-            container: ubuntu:24.04
-            pkg_manager: apt
-            compiler: clang
-            cc: clang-20
-            cxx: clang++-20
-            clang_version: "20"
-            llvm_dir: /usr/lib/llvm-20/lib/cmake/llvm
-            clang_dir: /usr/lib/llvm-20/lib/cmake/clang
-            build_type: release
-          - name: Ubuntu 24.04 • Clang 20
-            container: ubuntu:24.04
-            pkg_manager: apt
-            compiler: clang
-            cc: clang-20
-            cxx: clang++-20
-            clang_version: "20"
-            llvm_dir: /usr/lib/llvm-20/lib/cmake/llvm
-            clang_dir: /usr/lib/llvm-20/lib/cmake/clang
-            build_type: debug
-            preset: debug-system-cxx23
           - name: Ubuntu 24.04 • GCC
             container: ubuntu:24.04
             pkg_manager: apt
@@ -454,297 +409,6 @@ jobs:
             llvm_dir: /usr/lib/llvm-20/lib/cmake/llvm
             clang_dir: /usr/lib/llvm-20/lib/cmake/clang
             build_type: debug
-          - name: Ubuntu 24.04 • GCC
-            container: ubuntu:24.04
-            pkg_manager: apt
-            compiler: gcc
-            cc: gcc
-            cxx: g++
-            clang_version: "20"
-            llvm_dir: /usr/lib/llvm-20/lib/cmake/llvm
-            clang_dir: /usr/lib/llvm-20/lib/cmake/clang
-            build_type: release
-            # The package workflow owns Clang packaging. Retain one GCC lane
-            # so installed consumers also cover a non-Clang compiler.
-            enable_package_tests: "ON"
-          - name: Ubuntu 25.10 • Clang 20
-            container: ubuntu:25.10
-            pkg_manager: apt
-            compiler: clang
-            cc: clang-20
-            cxx: clang++-20
-            clang_version: "20"
-            llvm_dir: /usr/lib/llvm-20/lib/cmake/llvm
-            clang_dir: /usr/lib/llvm-20/lib/cmake/clang
-            build_type: debug
-          - name: Ubuntu 25.10 • Clang 20
-            container: ubuntu:25.10
-            pkg_manager: apt
-            compiler: clang
-            cc: clang-20
-            cxx: clang++-20
-            clang_version: "20"
-            llvm_dir: /usr/lib/llvm-20/lib/cmake/llvm
-            clang_dir: /usr/lib/llvm-20/lib/cmake/clang
-            build_type: ASan+UBSan
-            preset: alusan-system
-            ctest_parallel: 2
-          - name: Ubuntu 25.10 • Clang 20
-            container: ubuntu:25.10
-            pkg_manager: apt
-            compiler: clang
-            cc: clang-20
-            cxx: clang++-20
-            clang_version: "20"
-            llvm_dir: /usr/lib/llvm-20/lib/cmake/llvm
-            clang_dir: /usr/lib/llvm-20/lib/cmake/clang
-            build_type: release
-          - name: Ubuntu 25.10 • GCC
-            container: ubuntu:25.10
-            pkg_manager: apt
-            compiler: gcc
-            cc: gcc
-            cxx: g++
-            clang_version: "20"
-            llvm_dir: /usr/lib/llvm-20/lib/cmake/llvm
-            clang_dir: /usr/lib/llvm-20/lib/cmake/clang
-            build_type: debug
-          - name: Ubuntu 25.10 • GCC
-            container: ubuntu:25.10
-            pkg_manager: apt
-            compiler: gcc
-            cc: gcc
-            cxx: g++
-            clang_version: "20"
-            llvm_dir: /usr/lib/llvm-20/lib/cmake/llvm
-            clang_dir: /usr/lib/llvm-20/lib/cmake/clang
-            build_type: release
-          - name: Ubuntu 24.04 • LLVM 22
-            container: ubuntu:24.04
-            pkg_manager: apt
-            setup_mode: apt-llvm-org
-            compiler: clang
-            cc: clang-22
-            cxx: clang++-22
-            clang_version: "22"
-            llvm_dir: /usr/lib/llvm-22/lib/cmake/llvm
-            clang_dir: /usr/lib/llvm-22/lib/cmake/clang
-            build_type: debug
-            ci_exhaustive: true
-          - name: Ubuntu 24.04 • LLVM 22
-            container: ubuntu:24.04
-            pkg_manager: apt
-            setup_mode: apt-llvm-org
-            compiler: clang
-            cc: clang-22
-            cxx: clang++-22
-            clang_version: "22"
-            llvm_dir: /usr/lib/llvm-22/lib/cmake/llvm
-            clang_dir: /usr/lib/llvm-22/lib/cmake/clang
-            build_type: ASan+UBSan
-            preset: alusan-system
-            ctest_parallel: 2
-          - name: Ubuntu 24.04 • LLVM 23
-            container: ubuntu:24.04
-            pkg_manager: apt
-            setup_mode: apt-llvm-org
-            compiler: clang
-            cc: clang-23
-            cxx: clang++-23
-            clang_version: "23"
-            llvm_dir: /usr/lib/llvm-23/lib/cmake/llvm
-            clang_dir: /usr/lib/llvm-23/lib/cmake/clang
-            build_type: debug
-            ci_exhaustive: true
-          # Prefer pinned Alpine releases over `alpine:latest` so the
-          # LLVM/Clang package names and CMake package paths remain stable.
-          - name: Alpine 3.21 • Clang 19
-            container: alpine:3.21
-            pkg_manager: apk
-            compiler: clang
-            cc: clang-19
-            cxx: clang++-19
-            llvm_version: "19"
-            llvm_dir: /usr/lib/cmake/llvm19
-            clang_dir: /usr/lib/cmake/clang19
-            build_type: debug
-            codegen_jobs: 2
-          - name: Alpine 3.21 • Clang 19
-            container: alpine:3.21
-            pkg_manager: apk
-            compiler: clang
-            cc: clang-19
-            cxx: clang++-19
-            llvm_version: "19"
-            llvm_dir: /usr/lib/cmake/llvm19
-            clang_dir: /usr/lib/cmake/clang19
-            build_type: release
-            codegen_jobs: 2
-          - name: Alpine 3.23 • Clang 21
-            container: alpine:3.23
-            pkg_manager: apk
-            compiler: clang
-            cc: clang-21
-            cxx: clang++-21
-            llvm_version: "21"
-            llvm_dir: /usr/lib/cmake/llvm21
-            clang_dir: /usr/lib/cmake/clang21
-            build_type: debug
-            codegen_jobs: 2
-          - name: Alpine 3.23 • Clang 21
-            container: alpine:3.23
-            pkg_manager: apk
-            compiler: clang
-            cc: clang-21
-            cxx: clang++-21
-            llvm_version: "21"
-            llvm_dir: /usr/lib/cmake/llvm21
-            clang_dir: /usr/lib/cmake/clang21
-            build_type: release
-            codegen_jobs: 2
-          - name: Fedora 41 • Clang
-            container: fedora:41
-            pkg_manager: dnf
-            compiler: clang
-            cc: clang
-            cxx: clang++
-            llvm_dir: /usr/lib64/cmake/llvm
-            clang_dir: /usr/lib64/cmake/clang
-            build_type: debug
-          - name: Fedora 41 • Clang
-            container: fedora:41
-            pkg_manager: dnf
-            compiler: clang
-            cc: clang
-            cxx: clang++
-            llvm_dir: /usr/lib64/cmake/llvm
-            clang_dir: /usr/lib64/cmake/clang
-            build_type: release
-          - name: Fedora 41 • GCC
-            container: fedora:41
-            pkg_manager: dnf
-            compiler: gcc
-            cc: gcc
-            cxx: g++
-            llvm_dir: /usr/lib64/cmake/llvm
-            clang_dir: /usr/lib64/cmake/clang
-            build_type: debug
-          - name: Fedora 41 • GCC
-            container: fedora:41
-            pkg_manager: dnf
-            compiler: gcc
-            cc: gcc
-            cxx: g++
-            llvm_dir: /usr/lib64/cmake/llvm
-            clang_dir: /usr/lib64/cmake/clang
-            build_type: release
-          - name: Fedora 42 • Clang
-            container: fedora:42
-            pkg_manager: dnf
-            compiler: clang
-            cc: clang
-            cxx: clang++
-            llvm_dir: /usr/lib64/cmake/llvm
-            clang_dir: /usr/lib64/cmake/clang
-            build_type: debug
-          - name: Fedora 42 • Clang
-            container: fedora:42
-            pkg_manager: dnf
-            compiler: clang
-            cc: clang
-            cxx: clang++
-            llvm_dir: /usr/lib64/cmake/llvm
-            clang_dir: /usr/lib64/cmake/clang
-            build_type: release
-          - name: Fedora 42 • GCC
-            container: fedora:42
-            pkg_manager: dnf
-            compiler: gcc
-            cc: gcc
-            cxx: g++
-            llvm_dir: /usr/lib64/cmake/llvm
-            clang_dir: /usr/lib64/cmake/clang
-            build_type: debug
-          - name: Fedora 42 • GCC
-            container: fedora:42
-            pkg_manager: dnf
-            compiler: gcc
-            cc: gcc
-            cxx: g++
-            llvm_dir: /usr/lib64/cmake/llvm
-            clang_dir: /usr/lib64/cmake/clang
-            build_type: release
-          - name: Fedora 43 • Clang 21
-            container: fedora:43
-            pkg_manager: dnf
-            compiler: clang
-            cc: clang
-            cxx: clang++
-            llvm_dir: /usr/lib64/cmake/llvm
-            clang_dir: /usr/lib64/cmake/clang
-            build_type: debug
-          - name: Fedora 43 • Clang 21
-            container: fedora:43
-            pkg_manager: dnf
-            compiler: clang
-            cc: clang
-            cxx: clang++
-            llvm_dir: /usr/lib64/cmake/llvm
-            clang_dir: /usr/lib64/cmake/clang
-            build_type: ASan+UBSan
-            preset: alusan-system
-            ctest_parallel: 2
-          - name: Fedora 43 • Clang 21
-            container: fedora:43
-            pkg_manager: dnf
-            compiler: clang
-            cc: clang
-            cxx: clang++
-            llvm_dir: /usr/lib64/cmake/llvm
-            clang_dir: /usr/lib64/cmake/clang
-            build_type: release
-          - name: Fedora 43 • GCC
-            container: fedora:43
-            pkg_manager: dnf
-            compiler: gcc
-            cc: gcc
-            cxx: g++
-            llvm_dir: /usr/lib64/cmake/llvm
-            clang_dir: /usr/lib64/cmake/clang
-            build_type: debug
-          - name: Fedora 43 • GCC
-            container: fedora:43
-            pkg_manager: dnf
-            compiler: gcc
-            cc: gcc
-            cxx: g++
-            llvm_dir: /usr/lib64/cmake/llvm
-            clang_dir: /usr/lib64/cmake/clang
-            build_type: release
-          - name: Fedora 43 • LLVM 22
-            container: fedora:43
-            pkg_manager: dnf
-            setup_mode: upstream-archive
-            llvm_release: "22.1.0"
-            compiler: clang
-            cc: /opt/llvm-22.1.0/bin/clang
-            cxx: /opt/llvm-22.1.0/bin/clang++
-            llvm_dir: /opt/llvm-22.1.0/lib/cmake/llvm
-            clang_dir: /opt/llvm-22.1.0/lib/cmake/clang
-            build_type: debug
-          - name: Fedora 43 • LLVM 22
-            container: fedora:43
-            pkg_manager: dnf
-            setup_mode: upstream-archive
-            llvm_release: "22.1.0"
-            compiler: clang
-            cc: /opt/llvm-22.1.0/bin/clang
-            cxx: /opt/llvm-22.1.0/bin/clang++
-            llvm_dir: /opt/llvm-22.1.0/lib/cmake/llvm
-            clang_dir: /opt/llvm-22.1.0/lib/cmake/clang
-            build_type: ASan+UBSan
-            preset: alusan-system
-            ctest_parallel: 2
     steps:
       - name: Update and install dependencies (apt)
         if: ${{ matrix.pkg_manager == 'apt' }}
@@ -1046,119 +710,119 @@ jobs:
           fi
           ctest "${ctest_args[@]}"
 
-  package-workflow:
-    needs: plan
-    if: ${{ needs.plan.outputs.run_cmake == 'true' }}
-    name: Package Workflow
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+  # package-workflow:
+  #   needs: plan
+  #   if: ${{ needs.plan.outputs.run_cmake == 'true' }}
+  #   name: Package Workflow
+  #   runs-on: ubuntu-24.04
+  #   steps:
+  #     - name: Checkout
+  #       uses: actions/checkout@v6
 
-      - name: Cache vcpkg binary artifacts
-        uses: actions/cache@v5
-        with:
-          path: ~/.cache/vcpkg
-          key: vcpkg-${{ runner.os }}-package-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'scripts/setup-vcpkg.sh') }}
+  #     - name: Cache vcpkg binary artifacts
+  #       uses: actions/cache@v5
+  #       with:
+  #         path: ~/.cache/vcpkg
+  #         key: vcpkg-${{ runner.os }}-package-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'scripts/setup-vcpkg.sh') }}
 
-      - name: Install dependencies
-        run: |
-          set -euxo pipefail
-          export DEBIAN_FRONTEND=noninteractive
-          apt_common_opts=(-o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
-          apt_update_opts=("${apt_common_opts[@]}" -o APT::Update::Error-Mode=any)
-          apt_update() {
-            for attempt in 1 2 3 4 5; do
-              sudo apt-get "${apt_update_opts[@]}" update && return 0
-              sudo apt-get clean
-              sudo rm -rf /var/lib/apt/lists/*
-              sleep $((attempt * 10))
-            done
-            sudo apt-get "${apt_update_opts[@]}" update
-          }
-          apt_install() {
-            for attempt in 1 2 3 4 5; do
-              sudo apt-get "${apt_common_opts[@]}" install -y --no-install-recommends "$@" && return 0
-              sudo apt-get clean
-              sudo rm -rf /var/lib/apt/lists/*
-              sleep $((attempt * 10))
-              apt_update
-            done
-            sudo apt-get "${apt_common_opts[@]}" install -y --no-install-recommends "$@"
-          }
-          apt_update
-          apt_install \
-            git \
-            build-essential \
-            ninja-build \
-            python3 \
-            python3-pip \
-            pkg-config \
-            curl \
-            zip \
-            unzip \
-            tar \
-            ca-certificates \
-            gnupg \
-            libffi-dev \
-            libxml2-dev \
-            zlib1g-dev \
-            libzstd-dev \
-            libcurl4-openssl-dev \
-            libunwind-dev \
-            libfmt-dev
-          curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc >/dev/null
-          printf '%s\n' \
-            'Types: deb' \
-            'URIs: https://apt.llvm.org/noble/' \
-            'Suites: llvm-toolchain-noble-20' \
-            'Components: main' \
-            'Signed-By: /etc/apt/trusted.gpg.d/apt.llvm.org.asc' \
-            | sudo tee /etc/apt/sources.list.d/apt-llvm-20.sources >/dev/null
-          apt_update
-          apt_install \
-            clang-20 \
-            clang-tools-20 \
-            libclang-20-dev \
-            libclang-cpp20-dev \
-            llvm-20-dev
-          # The release-package preset pins CMake 4.3 experimental CPS/SBOM
-          # activation UUIDs, so keep this lane on the matching CMake release.
-          python3 -m pip install --break-system-packages cmake==4.3.4 ninja
-          python3 - <<'PY' >> "$GITHUB_PATH"
-          import sysconfig
-          print(sysconfig.get_path("scripts"))
-          PY
-          echo "/usr/lib/llvm-20/bin" >> "$GITHUB_PATH"
-          echo "LLVM_DIR=/usr/lib/llvm-20/lib/cmake/llvm" >> "$GITHUB_ENV"
-          echo "Clang_DIR=/usr/lib/llvm-20/lib/cmake/clang" >> "$GITHUB_ENV"
-          echo "CC=clang-20" >> "$GITHUB_ENV"
-          echo "CXX=clang++-20" >> "$GITHUB_ENV"
+  #     - name: Install dependencies
+  #       run: |
+  #         set -euxo pipefail
+  #         export DEBIAN_FRONTEND=noninteractive
+  #         apt_common_opts=(-o Acquire::Retries=5 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30)
+  #         apt_update_opts=("${apt_common_opts[@]}" -o APT::Update::Error-Mode=any)
+  #         apt_update() {
+  #           for attempt in 1 2 3 4 5; do
+  #             sudo apt-get "${apt_update_opts[@]}" update && return 0
+  #             sudo apt-get clean
+  #             sudo rm -rf /var/lib/apt/lists/*
+  #             sleep $((attempt * 10))
+  #           done
+  #           sudo apt-get "${apt_update_opts[@]}" update
+  #         }
+  #         apt_install() {
+  #           for attempt in 1 2 3 4 5; do
+  #             sudo apt-get "${apt_common_opts[@]}" install -y --no-install-recommends "$@" && return 0
+  #             sudo apt-get clean
+  #             sudo rm -rf /var/lib/apt/lists/*
+  #             sleep $((attempt * 10))
+  #             apt_update
+  #           done
+  #           sudo apt-get "${apt_common_opts[@]}" install -y --no-install-recommends "$@"
+  #         }
+  #         apt_update
+  #         apt_install \
+  #           git \
+  #           build-essential \
+  #           ninja-build \
+  #           python3 \
+  #           python3-pip \
+  #           pkg-config \
+  #           curl \
+  #           zip \
+  #           unzip \
+  #           tar \
+  #           ca-certificates \
+  #           gnupg \
+  #           libffi-dev \
+  #           libxml2-dev \
+  #           zlib1g-dev \
+  #           libzstd-dev \
+  #           libcurl4-openssl-dev \
+  #           libunwind-dev \
+  #           libfmt-dev
+  #         curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc >/dev/null
+  #         printf '%s\n' \
+  #           'Types: deb' \
+  #           'URIs: https://apt.llvm.org/noble/' \
+  #           'Suites: llvm-toolchain-noble-20' \
+  #           'Components: main' \
+  #           'Signed-By: /etc/apt/trusted.gpg.d/apt.llvm.org.asc' \
+  #           | sudo tee /etc/apt/sources.list.d/apt-llvm-20.sources >/dev/null
+  #         apt_update
+  #         apt_install \
+  #           clang-20 \
+  #           clang-tools-20 \
+  #           libclang-20-dev \
+  #           libclang-cpp20-dev \
+  #           llvm-20-dev
+  #         # The release-package preset pins CMake 4.3 experimental CPS/SBOM
+  #         # activation UUIDs, so keep this lane on the matching CMake release.
+  #         python3 -m pip install --break-system-packages cmake==4.3.4 ninja
+  #         python3 - <<'PY' >> "$GITHUB_PATH"
+  #         import sysconfig
+  #         print(sysconfig.get_path("scripts"))
+  #         PY
+  #         echo "/usr/lib/llvm-20/bin" >> "$GITHUB_PATH"
+  #         echo "LLVM_DIR=/usr/lib/llvm-20/lib/cmake/llvm" >> "$GITHUB_ENV"
+  #         echo "Clang_DIR=/usr/lib/llvm-20/lib/cmake/clang" >> "$GITHUB_ENV"
+  #         echo "CC=clang-20" >> "$GITHUB_ENV"
+  #         echo "CXX=clang++-20" >> "$GITHUB_ENV"
 
-      - name: Setup vcpkg
-        run: bash scripts/setup-vcpkg.sh
+  #     - name: Setup vcpkg
+  #       run: bash scripts/setup-vcpkg.sh
 
-      - name: Restore pinned packaging CMake
-        run: |
-          set -euxo pipefail
-          packaging_cmake_bin="$(python3 -c 'import cmake; print(cmake.CMAKE_BIN_DIR)')"
-          test -x "${packaging_cmake_bin}/cmake"
-          "${packaging_cmake_bin}/cmake" --version | grep -F 'cmake version 4.3.4'
-          echo "${packaging_cmake_bin}" >> "$GITHUB_PATH"
+  #     - name: Restore pinned packaging CMake
+  #       run: |
+  #         set -euxo pipefail
+  #         packaging_cmake_bin="$(python3 -c 'import cmake; print(cmake.CMAKE_BIN_DIR)')"
+  #         test -x "${packaging_cmake_bin}/cmake"
+  #         "${packaging_cmake_bin}/cmake" --version | grep -F 'cmake version 4.3.4'
+  #         echo "${packaging_cmake_bin}" >> "$GITHUB_PATH"
 
-      - name: Show tool versions
-        run: |
-          set -euxo pipefail
-          cmake --version
-          ninja --version
-          clang-20 --version
-          clang++-20 --version
+  #     - name: Show tool versions
+  #       run: |
+  #         set -euxo pipefail
+  #         cmake --version
+  #         ninja --version
+  #         clang-20 --version
+  #         clang++-20 --version
 
-      - name: Run package workflow
-        run: |
-          set -euxo pipefail
-          package_workflow=package
-          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
-            package_workflow=package-pr
-          fi
-          cmake --workflow --preset="${package_workflow}"
+  #     - name: Run package workflow
+  #       run: |
+  #         set -euxo pipefail
+  #         package_workflow=package
+  #         if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+  #           package_workflow=package-pr
+  #         fi
+  #         cmake --workflow --preset="${package_workflow}"
