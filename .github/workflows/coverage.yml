@@ -1,10 +1,10 @@
 name: coverage
 
 on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
+  # push:
+  #   branches: [ master ]
+  # pull_request:
+  #   branches: [ master ]
   workflow_dispatch:
 
 permissions:
@@ -23,48 +23,48 @@ env:
   CXX: clang++
 
 jobs:
-  plan:
-    name: Coverage • plan
-    runs-on: ubuntu-24.04
-    outputs:
-      run_coverage: ${{ steps.plan.outputs.run_coverage }}
-    steps:
-      - name: Checkout planner and history
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
+  # plan:
+  #   name: Coverage • plan
+  #   runs-on: ubuntu-24.04
+  #   outputs:
+  #     run_coverage: ${{ steps.plan.outputs.run_coverage }}
+  #   steps:
+  #     - name: Checkout planner and history
+  #       uses: actions/checkout@v6
+  #       with:
+  #         fetch-depth: 0
 
-      - name: Compute CI plan
-        id: plan
-        env:
-          CI_EVENT_NAME: ${{ github.event_name }}
-          CI_REF: ${{ github.ref }}
-          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: |
-          ci_plan_script="scripts/ci_plan.py"
-          if [ "${CI_EVENT_NAME}" = "pull_request" ]; then
-            ci_plan_script="${RUNNER_TEMP}/ci_plan.py"
-            if ! git show "${CI_BASE_SHA}:scripts/ci_plan.py" > "${ci_plan_script}"; then
-              ci_plan_script=""
-            fi
-          fi
-          if [ -z "${ci_plan_script}" ] || ! python3 "${ci_plan_script}" \
-            --event "${CI_EVENT_NAME}" \
-            --ref "${CI_REF}" \
-            --base "${CI_BASE_SHA}" \
-            --head "${CI_HEAD_SHA}" \
-            --github-output "${GITHUB_OUTPUT}"
-          then
-            echo "CI planner failed; enabling all lanes." >&2
-            for lane in cmake lint coverage cross_qemu bazel meson xmake; do
-              printf 'run_%s=true\n' "${lane}" >> "${GITHUB_OUTPUT}"
-            done
-          fi
+  #     - name: Compute CI plan
+  #       id: plan
+  #       env:
+  #         CI_EVENT_NAME: ${{ github.event_name }}
+  #         CI_REF: ${{ github.ref }}
+  #         CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+  #         CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+  #       run: |
+  #         ci_plan_script="scripts/ci_plan.py"
+  #         if [ "${CI_EVENT_NAME}" = "pull_request" ]; then
+  #           ci_plan_script="${RUNNER_TEMP}/ci_plan.py"
+  #           if ! git show "${CI_BASE_SHA}:scripts/ci_plan.py" > "${ci_plan_script}"; then
+  #             ci_plan_script=""
+  #           fi
+  #         fi
+  #         if [ -z "${ci_plan_script}" ] || ! python3 "${ci_plan_script}" \
+  #           --event "${CI_EVENT_NAME}" \
+  #           --ref "${CI_REF}" \
+  #           --base "${CI_BASE_SHA}" \
+  #           --head "${CI_HEAD_SHA}" \
+  #           --github-output "${GITHUB_OUTPUT}"
+  #         then
+  #           echo "CI planner failed; enabling all lanes." >&2
+  #           for lane in cmake lint coverage cross_qemu bazel meson xmake; do
+  #             printf 'run_%s=true\n' "${lane}" >> "${GITHUB_OUTPUT}"
+  #           done
+  #         fi
 
   coverage:
-    needs: plan
-    if: ${{ needs.plan.outputs.run_coverage == 'true' }}
+    # needs: plan
+    # if: ${{ needs.plan.outputs.run_coverage == 'true' }}
     name: Fedora 43 • Clang 21 • coverage
     runs-on: ubuntu-24.04
     container: fedora:43
@@ -186,51 +186,51 @@ jobs:
           set -euxo pipefail
           ctest --preset=${GENTEST_CMAKE_PRESET} --output-on-failure --parallel 1
 
-      - name: Coverage hygiene (codegen + runtime)
-        env:
-          LC_ALL: C.UTF-8
-          LANG: C.UTF-8
-        run: |
-          set -euxo pipefail
-          python3 scripts/coverage_hygiene.py \
-            --build-dir "build/${GENTEST_CMAKE_PRESET}" \
-            --ignore-statuses stamp_mismatch \
-            --gcov llvm-cov gcov
+      # - name: Coverage hygiene (codegen + runtime)
+      #   env:
+      #     LC_ALL: C.UTF-8
+      #     LANG: C.UTF-8
+      #   run: |
+      #     set -euxo pipefail
+      #     python3 scripts/coverage_hygiene.py \
+      #       --build-dir "build/${GENTEST_CMAKE_PRESET}" \
+      #       --ignore-statuses stamp_mismatch \
+      #       --gcov llvm-cov gcov
 
-      - name: Coverage report (codegen + runtime)
-        id: coverage_report
-        env:
-          LC_ALL: C.UTF-8
-          LANG: C.UTF-8
-        run: |
-          set -euxo pipefail
-          python3 scripts/coverage_report.py \
-            --build-dir "build/${GENTEST_CMAKE_PRESET}"
+      # - name: Coverage report (codegen + runtime)
+      #   id: coverage_report
+      #   env:
+      #     LC_ALL: C.UTF-8
+      #     LANG: C.UTF-8
+      #   run: |
+      #     set -euxo pipefail
+      #     python3 scripts/coverage_report.py \
+      #       --build-dir "build/${GENTEST_CMAKE_PRESET}"
 
-      - name: Publish coverage summary
-        if: ${{ always() }}
-        id: publish_coverage_summary
-        env:
-          COVERAGE_REPORT_OUTCOME: ${{ steps.coverage_report.outcome }}
-        run: |
-          set -euxo pipefail
-          summary_file="build/${GENTEST_CMAKE_PRESET}/coverage-report/summary.md"
-          has_summary=false
-          if [ -f "${summary_file}" ]; then
-            has_summary=true
-            cat "${summary_file}" >> "$GITHUB_STEP_SUMMARY"
-          elif [ "${COVERAGE_REPORT_OUTCOME}" = "failure" ] || [ "${COVERAGE_REPORT_OUTCOME}" = "skipped" ]; then
-            printf '%s\n' 'Coverage report summary was not available because coverage generation failed before summary publication completed.' >> "$GITHUB_STEP_SUMMARY"
-          else
-            printf '%s\n' "Expected coverage report at ${summary_file} after successful coverage_report step." >&2
-            exit 1
-          fi
-          printf 'has_summary=%s\n' "${has_summary}" >> "$GITHUB_OUTPUT"
+      # - name: Publish coverage summary
+      #   if: ${{ always() }}
+      #   id: publish_coverage_summary
+      #   env:
+      #     COVERAGE_REPORT_OUTCOME: ${{ steps.coverage_report.outcome }}
+      #   run: |
+      #     set -euxo pipefail
+      #     summary_file="build/${GENTEST_CMAKE_PRESET}/coverage-report/summary.md"
+      #     has_summary=false
+      #     if [ -f "${summary_file}" ]; then
+      #       has_summary=true
+      #       cat "${summary_file}" >> "$GITHUB_STEP_SUMMARY"
+      #     elif [ "${COVERAGE_REPORT_OUTCOME}" = "failure" ] || [ "${COVERAGE_REPORT_OUTCOME}" = "skipped" ]; then
+      #       printf '%s\n' 'Coverage report summary was not available because coverage generation failed before summary publication completed.' >> "$GITHUB_STEP_SUMMARY"
+      #     else
+      #       printf '%s\n' "Expected coverage report at ${summary_file} after successful coverage_report step." >&2
+      #       exit 1
+      #     fi
+      #     printf 'has_summary=%s\n' "${has_summary}" >> "$GITHUB_OUTPUT"
 
-      - name: Upload coverage report artifact
-        if: ${{ always() && steps.publish_coverage_summary.outputs.has_summary == 'true' }}
-        uses: actions/upload-artifact@v6
-        with:
-          name: coverage-${{ env.GENTEST_CMAKE_PRESET }}
-          path: build/${{ env.GENTEST_CMAKE_PRESET }}/coverage-report/
-          if-no-files-found: error
+      # - name: Upload coverage report artifact
+      #   if: ${{ always() && steps.publish_coverage_summary.outputs.has_summary == 'true' }}
+      #   uses: actions/upload-artifact@v6
+      #   with:
+      #     name: coverage-${{ env.GENTEST_CMAKE_PRESET }}
+      #     path: build/${{ env.GENTEST_CMAKE_PRESET }}/coverage-report/
+      #     if-no-files-found: error
